@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Developer-friendly package portal for Nexus Repository">
+  <title>Nexus Developer Portal</title>
+
+  <!--
+    All paths are relative so the page works regardless of the base URL
+    under which it is served.
+  -->
+  <link rel="stylesheet" href="css/portal.css">
+
+  <!--
+    Inline SVG favicon — no external request needed.
+    Modern browsers support <link rel="icon" type="image/svg+xml">.
+  -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,
+    <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>
+      <rect width='32' height='32' rx='8' fill='%232563eb'/>
+      <text x='16' y='22' text-anchor='middle' font-size='18' font-family='sans-serif'
+            font-weight='bold' fill='white'>N</text>
+    </svg>">
+</head>
+<body>
+
+  <!-- ─── Site Header ──────────────────────────────────────────────── -->
+  <header class="site-header" role="banner">
+    <div class="container">
+
+      <a href="#/" class="site-logo" aria-label="Nexus Developer Portal home">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+          <rect width="28" height="28" rx="7" fill="#2563eb"/>
+          <path d="M8 20V10l6-2 6 2v10l-6 2-6-2z" fill="white" opacity=".9"/>
+          <path d="M14 8v12M8 12l6 2 6-2" stroke="#2563eb" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+        Nexus Portal
+      </a>
+
+      <!-- Header-level search (hidden on mobile) -->
+      <div class="header-search" role="search" aria-label="Quick search">
+        <div class="search-input-wrap">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input type="search" id="header-search-input" placeholder="Search packages…"
+                 autocomplete="off" aria-label="Search packages">
+        </div>
+      </div>
+
+      <!-- Primary navigation -->
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="#/" data-nav="">Home</a>
+        <a href="#/search" data-nav="search">Packages</a>
+        <a href="#/repos" data-nav="repos">Repositories</a>
+      </nav>
+
+    </div>
+  </header>
+
+  <!-- ─── Main content (swapped by SPA router) ──────────────────── -->
+  <main id="app-content" aria-live="polite">
+    <!-- Rendered by app.js -->
+    <div style="display:flex;align-items:center;justify-content:center;min-height:60vh">
+      <div class="spinner" role="status" aria-label="Loading"></div>
+    </div>
+  </main>
+
+  <!-- ─── Site Footer ──────────────────────────────────────────────── -->
+  <footer class="site-footer" role="contentinfo">
+    <div class="container">
+      Nexus Developer Portal &nbsp;·&nbsp;
+      Powered by <a href="https://www.sonatype.com/products/sonatype-nexus-repository"
+                    target="_blank" rel="noopener">Nexus Repository CE</a>
+    </div>
+  </footer>
+
+  <!-- ─── Scripts ──────────────────────────────────────────────────── -->
+  <script type="module" src="js/app.js"></script>
+  <script>
+    // Header search box wired up here to avoid import complexity
+    (function () {
+      var input = document.getElementById('header-search-input');
+      if (!input) return;
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          var q = input.value.trim();
+          if (q) {
+            location.hash = '#/search?q=' + encodeURIComponent(q);
+            input.value = '';
+          }
+        }
+      });
+    })();
+  </script>
+
+</body>
+</html>

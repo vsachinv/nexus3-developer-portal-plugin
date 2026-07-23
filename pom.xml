@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.rxlogix.nexus</groupId>
+    <artifactId>nexus-developer-portal</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+
+    <name>Nexus Developer Portal Plugin</name>
+    <description>A developer-friendly portal for Nexus Repository CE</description>
+
+    <properties>
+        <!-- Nexus 3.94 JARs are compiled to Java 21 (class version 65); must match -->
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Must match the version printed in the Nexus startup log -->
+        <nexus.version>3.94.0-12</nexus.version>
+
+        <!-- Compile-time stand-ins; Nexus 3.94 ships Spring Boot 3.5 internally -->
+        <spring-boot.version>3.3.0</spring-boot.version>
+
+        <jackson.version>2.17.0</jackson.version>
+        <junit.version>5.10.0</junit.version>
+        <mockito.version>5.5.0</mockito.version>
+    </properties>
+
+    <dependencies>
+        <!-- ===== Nexus APIs (provided by the fat-JAR container) ===== -->
+        <dependency>
+            <groupId>org.sonatype.nexus</groupId>
+            <artifactId>nexus-core</artifactId>
+            <version>${nexus.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <!--
+            In Nexus 3.94 RepositoryManager moved from nexus-repository to nexus-repository-config.
+            nexus-datastore-api is a transitive compile dep needed to resolve RepositoryManager's type hierarchy.
+        -->
+        <dependency>
+            <groupId>org.sonatype.nexus</groupId>
+            <artifactId>nexus-repository-config</artifactId>
+            <version>${nexus.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.sonatype.nexus</groupId>
+            <artifactId>nexus-datastore-api</artifactId>
+            <version>${nexus.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <!--
+            nexus-repository-content provides the datastore Fluent API
+            (ContentFacet, FluentComponents, Component/Asset) used by the
+            npm and Maven package providers to browse repository contents.
+        -->
+        <dependency>
+            <groupId>org.sonatype.nexus</groupId>
+            <artifactId>nexus-repository-content</artifactId>
+            <version>${nexus.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- nexus-repository-view provides Content/Payload, returned by FluentAsset.download() -->
+        <dependency>
+            <groupId>org.sonatype.nexus</groupId>
+            <artifactId>nexus-repository-view</artifactId>
+            <version>${nexus.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <!--
+            nexus-repository-services provides RepositoryPermissionChecker, used to
+            filter repositories to those the current subject may read/browse.
+        -->
+        <dependency>
+            <groupId>org.sonatype.nexus</groupId>
+            <artifactId>nexus-repository-services</artifactId>
+            <version>${nexus.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- nexus-datastore contains DataStoreUsageChecker referenced in RepositoryManager's interface hierarchy -->
+        <dependency>
+            <groupId>org.sonatype.nexus</groupId>
+            <artifactId>nexus-datastore</artifactId>
+            <version>${nexus.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- nexus-common contains Lifecycle, also transitively required by RepositoryManager -->
+        <dependency>
+            <groupId>org.sonatype.nexus</groupId>
+            <artifactId>nexus-common</artifactId>
+            <version>${nexus.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <!--
+            nexus-rest provides org.sonatype.nexus.rest.Component (the new Spring marker
+            interface that replaces the old Sisu Resource marker in Nexus ≥ 3.94).
+        -->
+        <dependency>
+            <groupId>org.sonatype.nexus</groupId>
+            <artifactId>nexus-rest</artifactId>
+            <version>${nexus.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.sonatype.nexus</groupId>
+            <artifactId>nexus-security</artifactId>
+            <version>${nexus.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!--
+            RESTEasy SPI — provides ResteasyDeployment and Registry used for direct
+            resource registration. Version must match what the Nexus fat JAR ships
+            (BOOT-INF/lib/resteasy-core-spi-<version>.jar).
+        -->
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-core-spi</artifactId>
+            <version>7.0.0.Final</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- ===== Jakarta EE 10 (Nexus 3.94 uses jakarta.* namespace) ===== -->
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>3.1.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <version>2.0.1</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <version>6.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- ===== Spring Boot (provided by the fat JAR) ===== -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+            <version>${spring-boot.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+            <version>6.1.8</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- ===== Jackson (provided by Nexus) ===== -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+            <version>${jackson.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- commons-compress (provided by Nexus) — untar npm tarballs to read CHANGELOG.md -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+            <version>1.26.1</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- ===== Guava (provided by Nexus) ===== -->
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>33.2.1-jre</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- ===== Logging (provided by Nexus) ===== -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>2.0.13</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- ===== Test dependencies ===== -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>3.25.3</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <source>21</source>
+                    <target>21</target>
+                    <encoding>UTF-8</encoding>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
+
+            <!-- Produce a plain JAR (no fat-JAR repackaging needed) -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <Built-By>RxLogix</Built-By>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

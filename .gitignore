@@ -1,0 +1,16 @@
+# Local Nexus container data (mounted volume)
+nexus-docker-data/
+
+# Maven build output
+target/
+
+# IDE / editor
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# OS
+.DS_Store

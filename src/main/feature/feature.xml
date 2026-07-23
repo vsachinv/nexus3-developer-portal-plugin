@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<features xmlns="http://karaf.apache.org/xmlns/features/v1.4.0"
+          name="nexus-developer-portal-${project.version}">
+
+    <feature name="nexus-developer-portal" version="${project.version}"
+             description="Nexus Developer Portal — a Verdaccio-style UI for Nexus Repository CE">
+        <bundle>mvn:com.rxlogix.nexus/nexus-developer-portal/${project.version}</bundle>
+    </feature>
+
+</features>

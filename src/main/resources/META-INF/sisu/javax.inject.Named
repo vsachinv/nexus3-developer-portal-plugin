@@ -1,0 +1,7 @@
+com.rxlogix.nexus.devportal.internal.DevPortalModule
+com.rxlogix.nexus.devportal.service.impl.RepositoryServiceImpl
+com.rxlogix.nexus.devportal.service.impl.SearchServiceImpl
+com.rxlogix.nexus.devportal.rest.UiResource
+com.rxlogix.nexus.devportal.rest.SearchApiResource
+com.rxlogix.nexus.devportal.rest.RepositoryApiResource
+com.rxlogix.nexus.devportal.rest.RecentApiResource
