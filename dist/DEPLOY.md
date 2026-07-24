@@ -19,50 +19,125 @@ for building from source.
 
 ---
 
-## 2. Required configuration change (one-time, per Nexus instance)
+## 2. How Nexus loads the plugin (read this first)
 
-This is the one "other change" you must make. Nexus 3.94 will only load JARs
-from its `deploy/` folder if a `loader.properties` file points its classpath
-loader there. Create it once:
+The plugin is a JAR you place in a `deploy/` folder. Nexus only picks it up if it
+is started with Spring Boot's **`PropertiesLauncher`**, which reads a `loader.path`
+pointing at that folder. This detail is why the two install types differ:
 
-```bash
-cat > $NEXUS_DATA/etc/loader.properties <<'EOF'
-loader.path=/opt/sonatype/nexus/deploy
-EOF
-```
+- **Docker** images already start Nexus with `PropertiesLauncher` → you only set
+  `loader.path` (§4a).
+- **Native / traditional installs** start Nexus with `java -jar` → that uses the
+  JAR's default **`JarLauncher`**, which **ignores `loader.path` entirely**. You
+  must switch the launcher to `PropertiesLauncher` (§4b), or nothing loads.
 
-- `$NEXUS_DATA` is the Nexus data directory (in Docker: `/nexus-data`).
-- If your `deploy/` folder lives elsewhere, set `loader.path` to that absolute path.
-- Without this file, the JAR is silently ignored — nothing else will work.
+If you deploy and see no effect and no errors in the log, it's almost always
+this: the launcher isn't `PropertiesLauncher`.
 
 ---
 
-## 3. Deploy the plugin
+## 3. Get the JAR onto the server (binary-safe)
+
+A JAR is a binary; transferring it as text (copy-paste, an ASCII/text-mode SFTP,
+a web console, CRLF conversion) corrupts it. Always transfer in binary and
+**verify the checksum**.
+
+Reference for the shipped `1.0.0` artifact:
+
+| | Value |
+|---|---|
+| Size | `80663` bytes |
+| SHA-256 | `ce0b543fbd2510b378959324033c322f3615332ef5650016ec6d8e4d94a18605` |
 
 ```bash
-cp nexus-developer-portal-1.0.0.jar $NEXUS_HOME/deploy/
-# then restart Nexus
+# binary-safe copy (scp/rsync/sftp-binary), then verify ON THE SERVER:
+scp nexus-developer-portal-1.0.0.jar user@host:/tmp/
+sha256sum /tmp/nexus-developer-portal-1.0.0.jar          # must equal the value above
+unzip -l  /tmp/nexus-developer-portal-1.0.0.jar | tail -1 # lists 60 files, no error
 ```
 
-**Rule:** keep exactly **one** `nexus-developer-portal-*.jar` in `deploy/`.
-Remove any older version first — if two are present, Nexus loads both and the
-plugin's beans collide.
+Only proceed once the checksum matches. A corrupt JAR fails silently.
 
-### Docker
+---
+
+## 4. Enable plugin loading (one-time, per Nexus instance)
+
+Place the verified JAR in the deploy folder first. **Keep exactly one
+`nexus-developer-portal-*.jar` there** — two copies load together and the beans
+collide.
 
 ```bash
-# one-time config
+sudo cp /tmp/nexus-developer-portal-1.0.0.jar $NEXUS_HOME/deploy/
+sudo chown nexus:nexus $NEXUS_HOME/deploy/nexus-developer-portal-1.0.0.jar
+```
+
+Then follow **4a (Docker)** or **4b (native)** for your install.
+
+### 4a. Docker
+
+The container already runs `PropertiesLauncher`; just point `loader.path` at the
+deploy folder and restart.
+
+```bash
 docker exec <container> sh -c \
   'echo "loader.path=/opt/sonatype/nexus/deploy" > /nexus-data/etc/loader.properties'
-
-# deploy + restart
 docker cp nexus-developer-portal-1.0.0.jar <container>:/opt/sonatype/nexus/deploy/
 docker restart <container>
 ```
 
+### 4b. Native / traditional install (the `bin/nexus` launcher)
+
+Native installs start with `java -jar` (JarLauncher), so you must (i) tell the
+launcher where the deploy folder is, and (ii) switch it to `PropertiesLauncher`.
+Paths below assume a typical layout — adjust `$NEXUS_HOME` to yours (e.g.
+`/opt/nexus`, often a symlink to `/opt/nexus-<version>`).
+
+**(i) Set `loader.path` as a JVM option** — add one line to the vmoptions file
+(`$NEXUS_HOME/bin/nexus.vmoptions`), one option per line, no spaces:
+
+```
+-Dloader.path=/opt/nexus/deploy
+```
+
+**(ii) Switch the launcher to `PropertiesLauncher`.** The `bin/nexus` script
+invokes `java … -jar "$bootJar"` on two lines (the `start` and `run` paths).
+Change both to run `PropertiesLauncher` on the classpath instead:
+
+```bash
+sudo cp $NEXUS_HOME/bin/nexus $NEXUS_HOME/bin/nexus.bak          # backup / undo
+sudo sed -i 's|-jar "\$bootJar"|-cp "\$bootJar" org.springframework.boot.loader.launch.PropertiesLauncher|g' \
+  $NEXUS_HOME/bin/nexus
+# verify: both lines now show PropertiesLauncher, and NO  -jar "$bootJar"  remains
+grep -nE '\-jar "\$bootJar"|PropertiesLauncher' $NEXUS_HOME/bin/nexus
+```
+
+`PropertiesLauncher` reads the real application entry point from the JAR's
+`Start-Class` manifest, so Nexus boots exactly as before — it now also honors
+`-Dloader.path` and loads the plugin. (Editing the script does **not** restart
+Nexus; the change takes effect on the next restart. To undo:
+`sudo cp $NEXUS_HOME/bin/nexus.bak $NEXUS_HOME/bin/nexus`.)
+
+> **Upgrade caveat:** a Nexus upgrade may overwrite `bin/nexus` (and
+> `nexus.vmoptions`), reverting this. Re-apply the `sed` and the vmoptions line
+> after upgrading. Keep both commands handy.
+
+Optional but recommended before the service restart — test in the foreground and
+watch for the success line, then `Ctrl-C`:
+
+```bash
+sudo -u nexus $NEXUS_HOME/bin/nexus run
+#   look for:  Dev Portal: all 5 REST resources registered with RESTEasy
+```
+
+Then restart the service:
+
+```bash
+sudo systemctl restart nexus     # or your service name
+```
+
 ---
 
-## 4. Verify it loaded
+## 5. Verify it loaded
 
 Nexus takes roughly 90 seconds to start. Look for this line in the Nexus log
 (`$NEXUS_DATA/log/nexus.log`, or `docker logs <container>`):
@@ -71,14 +146,22 @@ Nexus takes roughly 90 seconds to start. Look for this line in the Nexus log
 Dev Portal: all 5 REST resources registered with RESTEasy
 ```
 
-If you see it, the plugin is live. If endpoints return 404, the JAR loaded but
-registration didn't happen — re-check step 2 (`loader.properties`) and confirm
-the JAR is actually in the `deploy/` folder. The plugin never affects Nexus's
-own startup: worst case the portal is unavailable, Nexus itself is fine.
+Then:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' \
+  http://<nexus-host>:<port>/service/rest/devportal/ui
+#   expect 200 (or a 303 redirect to ui/), not 404
+```
+
+If endpoints 404 and the log shows nothing about "Dev Portal", the JAR isn't on
+the classpath — re-check the launcher (§2 / §4b) and that the JAR is valid (§3).
+The plugin never affects Nexus's own startup: worst case the portal is
+unavailable, Nexus itself is fine.
 
 ---
 
-## 5. Using the portal
+## 6. Using the portal
 
 Open in a browser:
 
@@ -121,7 +204,7 @@ What you can do:
 
 ---
 
-## 6. REST API (optional, for scripts/tooling)
+## 7. REST API (optional, for scripts/tooling)
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -134,23 +217,30 @@ All endpoints honor the caller's Nexus permissions.
 
 ---
 
-## 7. Uninstall
+## 8. Upgrades & uninstall
+
+**Upgrade the plugin:** replace the JAR in `deploy/` (keep only one), restart.
+On a native install the launcher change from §4b persists across plugin
+upgrades — but re-check it after a *Nexus* version upgrade.
+
+**Uninstall:**
 
 ```bash
 rm $NEXUS_HOME/deploy/nexus-developer-portal-*.jar
+# native: optionally revert bin/nexus (sudo cp bin/nexus.bak bin/nexus) and
+#         remove the -Dloader.path line from nexus.vmoptions
 # restart Nexus
 ```
-
-Optionally remove `$NEXUS_DATA/etc/loader.properties` if nothing else in
-`deploy/` needs it.
 
 ---
 
 ## Troubleshooting
 
-| Symptom | Fix |
-|---------|-----|
-| Endpoints 404 after restart | `loader.properties` missing/wrong (step 2), or JAR not in `deploy/`. |
+| Symptom | Cause / Fix |
+|---------|-------------|
+| Endpoints 404, and the log has **no** "Dev Portal" line at all | JAR not on the classpath. Native install still on `java -jar` (JarLauncher) — apply §4b. Or `loader.path`/deploy path wrong. |
+| `unzip` says "not a zipfile" / size ≠ 80663 | JAR corrupted in transfer — re-copy in binary mode and verify SHA-256 (§3). |
 | Startup log shows a bean/duplicate error | More than one `nexus-developer-portal-*.jar` in `deploy/` — keep only one. |
-| UI looks stale after an upgrade | Hard-reload the browser once (assets send `Cache-Control: no-cache`, so a reload re-fetches). |
-| A package shows no README/Changelog | The package didn't publish one — npm README comes from published metadata; the Changelog tab needs a `CHANGELOG.md` in the package. |
+| Worked before, broke after a Nexus upgrade | The upgrade reset `bin/nexus` / `nexus.vmoptions` — re-apply §4b. |
+| UI looks stale after an upgrade | Hard-reload the browser once (assets send `Cache-Control: no-cache`). |
+| A package shows no README/Changelog | The package didn't publish one — npm README comes from published metadata; the Changelog tab needs a `CHANGELOG.md` inside the package. |
